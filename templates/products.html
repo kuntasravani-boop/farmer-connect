@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+    <title>Farmer Connect - Fertilizers</title>
+
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background-color: #f4f7f4;
+        }
+
+        .header {
+            background-color: #176b3a;
+            color: white;
+            padding: 20px;
+        }
+
+        .header h1 {
+            margin: 0;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 1100px;
+            margin: 30px auto;
+        }
+
+        .products {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+            gap: 20px;
+        }
+
+        .product {
+            background-color: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .product h2 {
+            color: #176b3a;
+        }
+
+        .price {
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        .stock {
+            color: #555;
+        }
+
+        button {
+            background-color: #176b3a;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .back {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: #176b3a;
+            text-decoration: none;
+        }
+    </style>
+
+</head>
+
+<body>
+
+    <div class="header">
+
+        <h1>🌾 Farmer Connect</h1>
+
+    </div>
+
+
+    <div class="container">
+
+        <a class="back" href="/login">
+            ← Back
+        </a>
+
+        <h1>🛒 Fertilizer Marketplace</h1>
+
+        <p>
+            Select the fertilizer you want to order.
+        </p>
+
+
+        <div class="products">
+
+            {% for fertilizer in fertilizers %}
+
+            <div class="product">
+
+                <h2>{{ fertilizer.name }}</h2>
+
+                <p class="price">
+                    ₹{{ fertilizer.price }} / bag
+                </p>
+
+                <p class="stock">
+                    Available stock:
+                    {{ fertilizer.stock }} bags
+                </p>
+
+                <button>
+                    Buy Now
+                </button>
+
+            </div>
+
+            {% endfor %}
+
+        </div>
+
+    </div>
+
+</body>
+
+</html>

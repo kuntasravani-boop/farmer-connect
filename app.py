@@ -40,5 +40,37 @@ def logout():
     return redirect("/")
 
 
+@app.route("/products")
+def products():
+
+    fertilizers = [
+        {
+            "name": "Urea",
+            "price": 266,
+            "stock": 100
+        },
+        {
+            "name": "DAP",
+            "price": 1350,
+            "stock": 50
+        },
+        {
+            "name": "NPK",
+            "price": 1200,
+            "stock": 80
+        },
+        {
+            "name": "MOP",
+            "price": 800,
+            "stock": 40
+        }
+    ]
+
+    return render_template(
+        "products.html",
+        fertilizers=fertilizers
+    )
+
+
 if __name__ == "__main__":
     app.run(debug=True)

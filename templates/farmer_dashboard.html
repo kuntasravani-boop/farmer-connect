@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Farmer Connect - Dashboard</title>
+
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background-color: #f4f7f4;
+        }
+
+        .header {
+            background-color: #176b3a;
+            color: white;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            margin: 0;
+        }
+
+        .logout {
+            color: white;
+            text-decoration: none;
+            background-color: #c0392b;
+            padding: 10px 15px;
+            border-radius: 6px;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 1100px;
+            margin: 30px auto;
+        }
+
+        .welcome {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            margin-bottom: 25px;
+        }
+
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .card h2 {
+            margin-top: 0;
+        }
+
+        .card button {
+            background-color: #176b3a;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="header">
+        <h1>🌾 Farmer Connect</h1>
+
+        <a class="logout" href="/logout">Logout</a>
+    </div>
+
+    <div class="container">
+
+        <div class="welcome">
+            <h2>Welcome, Farmer! 👨‍🌾</h2>
+            <p>Manage your fertilizer orders easily from one place.</p>
+        </div>
+
+        <div class="cards">
+
+            <div class="card">
+                <h2>🛒 Fertilizer Marketplace</h2>
+                <p>Check available fertilizers and place your order.</p>
+
+                <button onclick="location.href='/products'">
+                    Browse Fertilizers
+                </button>
+            </div>
+
+            <div class="card">
+                <h2>📦 My Orders</h2>
+                <p>View your fertilizer orders and their current status.</p>
+
+                <button onclick="alert('Order tracking will be added next.')">
+                    View Orders
+                </button>
+            </div>
+
+            <div class="card">
+                <h2>🚜 Delivery</h2>
+                <p>Choose self pickup or home delivery for your order.</p>
+
+                <button onclick="alert('Delivery options will appear after dealer confirmation.')">
+                    Delivery Details
+                </button>
+            </div>
+
+        </div>
+
+    </div>
+
+</body>
+
+</html>

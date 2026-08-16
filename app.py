@@ -163,6 +163,43 @@ def dealer_login():
         """
 
     return render_template("dealer_login.html")
+@app.route("/dealer-dashboard")
+def dealer_dashboard():
+
+    connection = get_connection()
+
+    orders = connection.execute(
+        """
+        SELECT
+            orders.id,
+            farmers.name AS farmer_name,
+            farmers.phone AS farmer_phone,
+            fertilizers.name AS fertilizer_name,
+            orders.quantity,
+            orders.address,
+            orders.status
+        FROM orders
+        JOIN farmers
+            ON orders.farmer_id = farmers.id
+        JOIN fertilizers
+            ON orders.fertilizer_id = fertilizers.id
+        ORDER BY orders.id DESC
+        """
+    ).fetchall()
+
+    connection.close()
+
+    return render_template(
+        "dealer_dashboard.html",
+        orders=orders
+    )
+
+    return redirect("/dealer-dashboard")
+    connection.commit()
+    connection.close()
+
+    return redirect("/dealer-dashboard")
+
 @app.route("/dealer/confirm/<int:order_id>")
 def confirm_order(order_id):
 
@@ -179,7 +216,6 @@ def confirm_order(order_id):
             order_id
         )
     )
-
     connection.commit()
     connection.close()
 
@@ -200,10 +236,11 @@ def reject_order(order_id):
             order_id
         )
     )
-
     connection.commit()
     connection.close()
 
     return redirect("/dealer-dashboard")
+
+
 if __name__ == "__main__":
     app.run(debug=True)

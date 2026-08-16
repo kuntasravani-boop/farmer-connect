@@ -240,7 +240,98 @@ def reject_order(order_id):
     connection.close()
 
     return redirect("/dealer-dashboard")
+@app.route("/my-orders")
+def my_orders():
 
+    connection = get_connection()
+
+    farmer = connection.execute(
+        """
+        SELECT id
+        FROM farmers
+        WHERE phone = ?
+        """,
+        ("9876543210",)
+    ).fetchone()
+
+    if farmer is None:
+        connection.close()
+        return "<h1>Farmer account not found.</h1>"
+
+    orders = connection.execute(
+        """
+        SELECT
+            orders.id,
+            fertilizers.name,
+            fertilizers.price,
+            orders.quantity,
+            orders.address,
+            orders.status
+        FROM orders
+        JOIN fertilizers
+            ON orders.fertilizer_id = fertilizers.id
+        WHERE orders.farmer_id = ?
+        ORDER BY orders.id DESC
+        """,
+        (farmer["id"],)
+    ).fetchall()
+
+    connection.close()
+
+    return render_template(
+        "my_orders.html",
+        orders=orders
+    )
+
+@app.route("/order/<int:order_id>/delivery-choice", methods=["POST"])
+def delivery_choice(order_id):
+
+    delivery_type = request.form["delivery_type"]
+
+    if delivery_type not in ["Self Pickup", "Home Delivery"]:
+        return "<h1>Invalid delivery choice.</h1>"
+
+    connection = get_connection()
+
+    order = connection.execute(
+        """
+        SELECT id, status
+        FROM orders
+        WHERE id = ?
+        """,
+        (order_id,)
+    ).fetchone()
+
+    if order is None:
+        connection.close()
+        return "<h1>Order not found.</h1>"
+
+    if order["status"] != "Dealer Confirmed - Awaiting Pickup/Delivery Choice":
+        connection.close()
+        return "<h1>Delivery choice is not available for this order.</h1>"
+
+    if delivery_type == "Self Pickup":
+        status = "Ready for Pickup"
+    else:
+        status = "Delivery Requested"
+
+    connection.execute(
+        """
+        UPDATE orders
+        SET delivery_type = ?, status = ?
+        WHERE id = ?
+        """,
+        (
+            delivery_type,
+            status,
+            order_id
+        )
+    )
+
+    connection.commit()
+    connection.close()
+
+    return redirect("/my-orders")
 
 if __name__ == "__main__":
     app.run(debug=True)

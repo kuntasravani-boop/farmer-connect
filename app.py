@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request, redirect
+from database import get_connection
 
 app = Flask(__name__)
 
@@ -39,38 +40,97 @@ def login():
 def logout():
     return redirect("/")
 
-
 @app.route("/products")
 def products():
 
-    fertilizers = [
-        {
-            "name": "Urea",
-            "price": 266,
-            "stock": 100
-        },
-        {
-            "name": "DAP",
-            "price": 1350,
-            "stock": 50
-        },
-        {
-            "name": "NPK",
-            "price": 1200,
-            "stock": 80
-        },
-        {
-            "name": "MOP",
-            "price": 800,
-            "stock": 40
-        }
-    ]
+    connection = get_connection()
+
+    fertilizers = connection.execute("""
+        SELECT id, name, price, stock
+        FROM fertilizers
+    """).fetchall()
+
+    connection.close()
 
     return render_template(
         "products.html",
         fertilizers=fertilizers
     )
+@app.route("/buy/<int:fertilizer_id>", methods=["GET", "POST"])
+def buy_fertilizer(fertilizer_id):
 
+    connection = get_connection()
 
+    fertilizer = connection.execute(
+        """
+        SELECT id, name, price, stock
+        FROM fertilizers
+        WHERE id = ?
+        """,
+        (fertilizer_id,)
+    ).fetchone()
+
+    connection.close()
+
+    if fertilizer is None:
+        return "<h1>Fertilizer not found</h1>"
+
+    if request.method == "POST":
+
+        quantity = int(request.form["quantity"])
+        address = request.form["address"]
+
+        if quantity <= 0:
+            return "<h1>Quantity must be greater than 0.</h1>"
+
+        if quantity > fertilizer["stock"]:
+            return "<h1>Not enough fertilizer available.</h1>"
+
+        connection = get_connection()
+
+        farmer = connection.execute(
+            "SELECT id FROM farmers WHERE phone = ?",
+            ("9876543210",)
+        ).fetchone()
+
+        if farmer is None:
+            connection.close()
+            return "<h1>Farmer account not found.</h1>"
+
+        connection.execute(
+            """
+            INSERT INTO orders
+            (farmer_id, fertilizer_id, quantity, delivery_type, address, status)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                farmer["id"],
+                fertilizer["id"],
+                quantity,
+                "Pending",
+                address,
+                "Pending Dealer Confirmation"
+            )
+        )
+
+        connection.commit()
+
+        order_id = connection.execute(
+            "SELECT last_insert_rowid()"
+        ).fetchone()[0]
+
+        connection.close()
+
+        return render_template(
+            "order_success.html",
+            order_id=order_id,
+            fertilizer=fertilizer,
+            quantity=quantity
+        )
+
+    return render_template(
+        "order_form.html",
+        fertilizer=fertilizer
+    )
 if __name__ == "__main__":
     app.run(debug=True)

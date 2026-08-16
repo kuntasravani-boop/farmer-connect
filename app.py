@@ -132,5 +132,115 @@ def buy_fertilizer(fertilizer_id):
         "order_form.html",
         fertilizer=fertilizer
     )
+@app.route("/dealer-login", methods=["GET", "POST"])
+def dealer_login():
+
+    if request.method == "POST":
+
+        phone = request.form["phone"]
+        password = request.form["password"]
+
+        connection = get_connection()
+
+        dealer = connection.execute(
+            """
+            SELECT id, name
+            FROM dealers
+            WHERE phone = ? AND password = ?
+            """,
+            (phone, password)
+        ).fetchone()
+
+        connection.close()
+
+        if dealer:
+
+            return redirect("/dealer-dashboard")
+
+        return """
+        <h1>❌ Invalid Dealer Login</h1>
+        <a href="/dealer-login">Try Again</a>
+        """
+
+    return render_template("dealer_login.html")
+@app.route("/dealer-dashboard")
+def dealer_dashboard():
+
+    connection = get_connection()
+
+    orders = connection.execute(
+        """
+        SELECT
+            orders.id,
+            farmers.name AS farmer_name,
+            farmers.phone AS farmer_phone,
+            fertilizers.name AS fertilizer_name,
+            orders.quantity,
+            orders.address,
+            orders.status
+        FROM orders
+        JOIN farmers
+            ON orders.farmer_id = farmers.id
+        JOIN fertilizers
+            ON orders.fertilizer_id = fertilizers.id
+        ORDER BY orders.id DESC
+        """
+    ).fetchall()
+
+    connection.close()
+
+    return render_template(
+        "dealer_dashboard.html",
+        orders=orders
+    )
+
+    return redirect("/dealer-dashboard")
+    connection.commit()
+    connection.close()
+
+    return redirect("/dealer-dashboard")
+
+@app.route("/dealer/confirm/<int:order_id>")
+def confirm_order(order_id):
+
+    connection = get_connection()
+
+    connection.execute(
+        """
+        UPDATE orders
+        SET status = ?
+        WHERE id = ?
+        """,
+        (
+            "Dealer Confirmed - Awaiting Pickup/Delivery Choice",
+            order_id
+        )
+    )
+    connection.commit()
+    connection.close()
+
+    return redirect("/dealer-dashboard")
+@app.route("/dealer/reject/<int:order_id>")
+def reject_order(order_id):
+
+    connection = get_connection()
+
+    connection.execute(
+        """
+        UPDATE orders
+        SET status = ?
+        WHERE id = ?
+        """,
+        (
+            "Rejected by Dealer",
+            order_id
+        )
+    )
+    connection.commit()
+    connection.close()
+
+    return redirect("/dealer-dashboard")
+
+
 if __name__ == "__main__":
     app.run(debug=True)

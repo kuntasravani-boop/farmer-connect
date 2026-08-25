@@ -259,22 +259,29 @@ def my_orders():
         return "<h1>Farmer account not found.</h1>"
 
     orders = connection.execute(
-        """
-        SELECT
-            orders.id,
-            fertilizers.name,
-            fertilizers.price,
-            orders.quantity,
-            orders.address,
-            orders.status
-        FROM orders
-        JOIN fertilizers
-            ON orders.fertilizer_id = fertilizers.id
-        WHERE orders.farmer_id = ?
-        ORDER BY orders.id DESC
-        """,
-        (farmer["id"],)
-    ).fetchall()
+    """
+    SELECT
+        orders.id,
+        fertilizers.name AS fertilizer_name,
+        fertilizers.price,
+        orders.quantity,
+        orders.address,
+        orders.status,
+        orders.delivery_type,
+        vehicles.vehicle_number,
+        vehicles.vehicle_type,
+        vehicles.driver_name,
+        vehicles.driver_phone
+    FROM orders
+    JOIN fertilizers
+        ON orders.fertilizer_id = fertilizers.id
+    LEFT JOIN vehicles
+        ON orders.vehicle_id = vehicles.id
+    WHERE orders.farmer_id = ?
+    ORDER BY orders.id DESC
+    """,
+    (farmer["id"],)
+).fetchall()
 
     connection.close()
 

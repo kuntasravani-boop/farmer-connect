@@ -333,5 +333,193 @@ def delivery_choice(order_id):
 
     return redirect("/my-orders")
 
+@app.route("/delivery-management")
+def delivery_management():
+
+    connection = get_connection()
+
+    orders = connection.execute(
+        """
+        SELECT
+            orders.id,
+            farmers.name AS farmer_name,
+            farmers.phone AS farmer_phone,
+            fertilizers.name AS fertilizer_name,
+            orders.quantity,
+            orders.address,
+            orders.status,
+            orders.vehicle_id,
+            vehicles.vehicle_number,
+            vehicles.vehicle_type,
+            vehicles.driver_name,
+            vehicles.driver_phone
+        FROM orders
+        JOIN farmers
+            ON orders.farmer_id = farmers.id
+        JOIN fertilizers
+            ON orders.fertilizer_id = fertilizers.id
+        LEFT JOIN vehicles
+            ON orders.vehicle_id = vehicles.id
+        WHERE orders.status IN (?, ?, ?, ?)
+        ORDER BY orders.id DESC
+        """,
+        (
+            "Delivery Requested",
+            "Vehicle Assigned",
+            "Driver Accepted",
+            "Out for Delivery"
+        )
+    ).fetchall()
+
+    vehicles = connection.execute(
+        """
+        SELECT
+            id,
+            vehicle_number,
+            vehicle_type,
+            capacity,
+            driver_name,
+            driver_phone,
+            current_location,
+            destination
+        FROM vehicles
+        WHERE available = 1
+        ORDER BY capacity ASC
+        """
+    ).fetchall()
+
+    connection.close()
+
+    return render_template(
+        "delivery_management.html",
+        orders=orders,
+        vehicles=vehicles
+    )
+@app.route("/update-delivery-status/<int:order_id>/<status>", methods=["POST"])
+def update_delivery_status(order_id, status):
+
+    allowed_statuses = [
+        "Driver Accepted",
+        "Out for Delivery",
+        "Delivered"
+    ]
+
+    if status not in allowed_statuses:
+        return "Invalid delivery status", 400
+
+    connection = get_connection()
+
+    order = connection.execute(
+        """
+        SELECT id, vehicle_id, status
+        FROM orders
+        WHERE id = ?
+        """,
+        (order_id,)
+    ).fetchone()
+
+    if order is None:
+        connection.close()
+        return "Order not found", 404
+
+    connection.execute(
+        """
+        UPDATE orders
+        SET status = ?
+        WHERE id = ?
+        """,
+        (status, order_id)
+    )
+
+    # When delivery is completed,
+    # make the vehicle available again.
+    if status == "Delivered" and order["vehicle_id"]:
+
+        connection.execute(
+            """
+            UPDATE vehicles
+            SET available = 1
+            WHERE id = ?
+            """,
+            (order["vehicle_id"],)
+        )
+
+    connection.commit()
+    connection.close()
+
+    return redirect("/delivery-management")
+@app.route("/assign-vehicle/<int:order_id>/<int:vehicle_id>", methods=["POST"])
+def assign_vehicle(order_id, vehicle_id):
+
+    connection = get_connection()
+
+    # Check the order
+    order = connection.execute(
+        """
+        SELECT id, quantity, status
+        FROM orders
+        WHERE id = ?
+        """,
+        (order_id,)
+    ).fetchone()
+
+    if order is None:
+        connection.close()
+        return "<h1>Order not found.</h1>"
+
+    # Check the vehicle
+    vehicle = connection.execute(
+        """
+        SELECT id, vehicle_number, capacity, available
+        FROM vehicles
+        WHERE id = ?
+        """,
+        (vehicle_id,)
+    ).fetchone()
+
+    if vehicle is None:
+        connection.close()
+        return "<h1>Vehicle not found.</h1>"
+
+    # Check vehicle availability
+    if vehicle["available"] != 1:
+        connection.close()
+        return "<h1>This vehicle is currently unavailable.</h1>"
+
+    # Check capacity
+    if vehicle["capacity"] < order["quantity"]:
+        connection.close()
+        return "<h1>Vehicle capacity is insufficient for this order.</h1>"
+
+    # Assign vehicle to order
+    connection.execute(
+        """
+        UPDATE orders
+        SET vehicle_id = ?,
+            status = ?
+        WHERE id = ?
+        """,
+        (
+            vehicle_id,
+            "Vehicle Assigned",
+            order_id
+        )
+    )
+
+    # Make vehicle unavailable
+    connection.execute(
+        """
+        UPDATE vehicles
+        SET available = 0
+        WHERE id = ?
+        """,
+        (vehicle_id,)
+    )
+
+    connection.commit()
+    connection.close()
+
+    return redirect("/delivery-management")
+
 if __name__ == "__main__":
     app.run(debug=True)

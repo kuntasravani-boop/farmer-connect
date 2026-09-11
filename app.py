@@ -168,6 +168,7 @@ def dealer_dashboard():
 
     connection = get_connection()
 
+    # Get all orders
     orders = connection.execute(
         """
         SELECT
@@ -187,19 +188,148 @@ def dealer_dashboard():
         """
     ).fetchall()
 
+
+    # -------------------------------------------------
+    # Smart Delivery Summary
+    # -------------------------------------------------
+
+    delivery_requests = connection.execute(
+        """
+        SELECT
+            id,
+            quantity,
+            address,
+            status
+        FROM orders
+        WHERE status = 'Delivery Requested'
+        """
+    ).fetchall()
+
+
+    smart_delivery_count = len(delivery_requests)
+
+    shared_delivery_count = 0
+
+    new_vehicle_count = 0
+
+    no_vehicle_count = 0
+
+
+    # Check every delivery request
+    for order in delivery_requests:
+
+        vehicles = connection.execute(
+            """
+            SELECT
+                id,
+                capacity,
+                destination,
+                available
+            FROM vehicles
+            WHERE available = 1
+               OR EXISTS (
+                    SELECT 1
+                    FROM orders
+                    WHERE orders.vehicle_id = vehicles.id
+                    AND orders.status IN (
+                        'Vehicle Assigned',
+                        'Driver Accepted',
+                        'Out for Delivery'
+                    )
+               )
+            """
+        ).fetchall()
+
+
+        shared_found = False
+
+        new_vehicle_found = False
+
+
+        order_address = (
+            order["address"] or ""
+        ).lower()
+
+
+        for vehicle in vehicles:
+
+            # Calculate current load
+            load = connection.execute(
+                """
+                SELECT COALESCE(SUM(quantity), 0)
+                    AS total_load
+                FROM orders
+                WHERE vehicle_id = ?
+                AND status IN (
+                    'Vehicle Assigned',
+                    'Driver Accepted',
+                    'Out for Delivery'
+                )
+                """,
+                (vehicle["id"],)
+            ).fetchone()
+
+
+            current_load = load["total_load"]
+
+
+            remaining_capacity = (
+                vehicle["capacity"] - current_load
+            )
+
+
+            if remaining_capacity < order["quantity"]:
+                continue
+
+
+            vehicle_destination = (
+                vehicle["destination"] or ""
+            ).lower()
+
+
+            # Check destination compatibility
+            destination_match = (
+                vehicle_destination in order_address
+                or order_address in vehicle_destination
+            )
+
+
+            if destination_match:
+
+                if current_load > 0:
+
+                    shared_found = True
+
+                else:
+
+                    new_vehicle_found = True
+
+
+        # Count recommendation type
+        if shared_found:
+
+            shared_delivery_count += 1
+
+        elif new_vehicle_found:
+
+            new_vehicle_count += 1
+
+        else:
+
+            no_vehicle_count += 1
+
+
     connection.close()
+
 
     return render_template(
         "dealer_dashboard.html",
-        orders=orders
+        orders=orders,
+        smart_delivery_count=smart_delivery_count,
+        shared_delivery_count=shared_delivery_count,
+        new_vehicle_count=new_vehicle_count,
+        no_vehicle_count=no_vehicle_count
     )
-
-    return redirect("/dealer-dashboard")
-    connection.commit()
-    connection.close()
-
-    return redirect("/dealer-dashboard")
-
 @app.route("/dealer/confirm/<int:order_id>")
 def confirm_order(order_id):
 

@@ -339,6 +339,248 @@ def delivery_choice(order_id):
     connection.close()
 
     return redirect("/my-orders")
+@app.route("/smart-vehicle/<int:order_id>")
+def smart_vehicle(order_id):
+
+    connection = get_connection()
+
+    # Get the new delivery order
+    order = connection.execute(
+        """
+        SELECT
+            orders.id,
+            orders.quantity,
+            orders.address,
+            orders.status
+        FROM orders
+        WHERE orders.id = ?
+        """,
+        (order_id,)
+    ).fetchone()
+
+    if order is None:
+        connection.close()
+        return "<h1>Order not found.</h1>"
+
+
+    # -------------------------------------------------
+    # Get vehicles that are either:
+    # 1. Available
+    # OR
+    # 2. Already carrying an active delivery
+    # -------------------------------------------------
+
+    vehicles = connection.execute(
+        """
+        SELECT
+            vehicles.id,
+            vehicles.vehicle_number,
+            vehicles.vehicle_type,
+            vehicles.capacity,
+            vehicles.driver_name,
+            vehicles.driver_phone,
+            vehicles.current_location,
+            vehicles.destination,
+            vehicles.available
+        FROM vehicles
+        WHERE vehicles.available = 1
+           OR EXISTS (
+                SELECT 1
+                FROM orders
+                WHERE orders.vehicle_id = vehicles.id
+                AND orders.status IN (
+                    'Vehicle Assigned',
+                    'Driver Accepted',
+                    'Out for Delivery'
+                )
+           )
+        """
+    ).fetchall()
+
+
+    recommendations = []
+
+
+    # -------------------------------------------------
+    # Prepare new order destination
+    # -------------------------------------------------
+
+    order_address = (order["address"] or "").lower()
+
+    # Remove common punctuation
+    order_address = (
+        order_address
+        .replace(",", " ")
+        .replace("-", " ")
+        .replace("/", " ")
+    )
+
+    order_locations = set(order_address.split())
+
+
+    # Words that should NOT be treated as locations
+    ignored_words = {
+        "road",
+        "street",
+        "main",
+        "near",
+        "behind",
+        "opposite",
+        "beside",
+        "village",
+        "mandal",
+        "district",
+        "the"
+    }
+
+    order_locations = {
+        word for word in order_locations
+        if word not in ignored_words
+    }
+
+
+    # -------------------------------------------------
+    # Check every vehicle
+    # -------------------------------------------------
+
+    for vehicle in vehicles:
+
+        # Calculate current load of the vehicle
+        load = connection.execute(
+            """
+            SELECT COALESCE(SUM(quantity), 0) AS total_load
+            FROM orders
+            WHERE vehicle_id = ?
+            AND status IN (
+                'Vehicle Assigned',
+                'Driver Accepted',
+                'Out for Delivery'
+            )
+            """,
+            (vehicle["id"],)
+        ).fetchone()
+
+
+        current_load = load["total_load"]
+
+        remaining_capacity = (
+            vehicle["capacity"] - current_load
+        )
+
+
+        # Vehicle destination
+        vehicle_destination = (
+            vehicle["destination"] or ""
+        ).lower()
+
+        vehicle_destination = (
+            vehicle_destination
+            .replace(",", " ")
+            .replace("-", " ")
+            .replace("/", " ")
+        )
+
+        vehicle_locations = set(
+            vehicle_destination.split()
+        )
+
+        vehicle_locations = {
+            word for word in vehicle_locations
+            if word not in ignored_words
+        }
+
+
+        # -------------------------------------------------
+        # Find common locations
+        # -------------------------------------------------
+
+        common_locations = (
+            order_locations.intersection(
+                vehicle_locations
+            )
+        )
+
+
+        destination_match = len(common_locations) > 0
+
+
+        # -------------------------------------------------
+        # Check capacity
+        # -------------------------------------------------
+
+        enough_capacity = (
+            remaining_capacity >= order["quantity"]
+        )
+
+
+        # -------------------------------------------------
+        # Determine recommendation type
+        # -------------------------------------------------
+
+        shared_delivery = (
+            destination_match
+            and enough_capacity
+            and current_load > 0
+        )
+
+
+        new_vehicle_recommendation = (
+            destination_match
+            and enough_capacity
+            and current_load == 0
+        )
+
+
+        # Add vehicle if it has enough capacity
+        if enough_capacity:
+
+            recommendations.append({
+
+                "vehicle": vehicle,
+
+                "current_load": current_load,
+
+                "remaining_capacity": remaining_capacity,
+
+                "destination_match": destination_match,
+
+                "shared_delivery": shared_delivery,
+
+                "new_vehicle_recommendation":
+                    new_vehicle_recommendation,
+
+                "common_locations":
+                    ", ".join(common_locations)
+
+            })
+
+
+    connection.close()
+
+
+    # -------------------------------------------------
+    # Sort recommendations
+    #
+    # 1. Shared delivery
+    # 2. Destination match
+    # 3. Remaining capacity
+    # -------------------------------------------------
+
+    recommendations.sort(
+        key=lambda x: (
+            x["shared_delivery"],
+            x["destination_match"],
+            x["remaining_capacity"]
+        ),
+        reverse=True
+    )
+
+
+    return render_template(
+        "smart_vehicle.html",
+        order=order,
+        recommendations=recommendations
+    )
 
 @app.route("/delivery-management")
 def delivery_management():
@@ -527,6 +769,137 @@ def assign_vehicle(order_id, vehicle_id):
     connection.close()
 
     return redirect("/delivery-management")
+@app.route("/assign-shared-vehicle/<int:order_id>/<int:vehicle_id>", methods=["POST"])
+def assign_shared_vehicle(order_id, vehicle_id):
+
+    connection = get_connection()
+
+    # Get the new order
+    order = connection.execute(
+        """
+        SELECT
+            id,
+            quantity,
+            address,
+            status
+        FROM orders
+        WHERE id = ?
+        """,
+        (order_id,)
+    ).fetchone()
+
+    if order is None:
+        connection.close()
+        return "<h1>Order not found.</h1>"
+
+    # Get the selected vehicle
+    vehicle = connection.execute(
+        """
+        SELECT
+            id,
+            vehicle_number,
+            capacity,
+            destination
+        FROM vehicles
+        WHERE id = ?
+        """,
+        (vehicle_id,)
+    ).fetchone()
+
+    if vehicle is None:
+        connection.close()
+        return "<h1>Vehicle not found.</h1>"
+
+    # Calculate current vehicle load
+    load = connection.execute(
+        """
+        SELECT COALESCE(SUM(quantity), 0) AS total_load
+        FROM orders
+        WHERE vehicle_id = ?
+        AND status IN (
+            'Vehicle Assigned',
+            'Driver Accepted',
+            'Out for Delivery'
+        )
+        """,
+        (vehicle_id,)
+    ).fetchone()
+
+    current_load = load["total_load"]
+
+    remaining_capacity = (
+        vehicle["capacity"] - current_load
+    )
+
+    # Check capacity
+    if remaining_capacity < order["quantity"]:
+
+        connection.close()
+
+        return """
+        <h1>Not enough vehicle capacity.</h1>
+        <p>This vehicle cannot carry this order.</p>
+        <a href="/smart-vehicle/{0}">Go Back</a>
+        """.format(order_id)
+
+    # Check destination
+    order_address = (order["address"] or "").lower()
+    vehicle_destination = (vehicle["destination"] or "").lower()
+
+    if (
+        vehicle_destination not in order_address
+        and order_address not in vehicle_destination
+    ):
+
+        connection.close()
+
+        return """
+        <h1>Destination does not match.</h1>
+        <p>This order cannot be added to this delivery.</p>
+        <a href="/smart-vehicle/{0}">Go Back</a>
+        """.format(order_id)
+
+    # Assign order to existing vehicle
+    connection.execute(
+        """
+        UPDATE orders
+        SET vehicle_id = ?,
+            status = 'Vehicle Assigned'
+        WHERE id = ?
+        """,
+        (vehicle_id, order_id)
+    )
+
+    # Keep vehicle unavailable because it is carrying deliveries
+    connection.execute(
+        """
+        UPDATE vehicles
+        SET available = 0
+        WHERE id = ?
+        """,
+        (vehicle_id,)
+    )
+
+    connection.commit()
+
+    connection.close()
+
+    return """
+    <h1>✅ Shared Delivery Assigned Successfully</h1>
+
+    <p>Order FC{0} has been added to vehicle {1}.</p>
+
+    <p>Status: Vehicle Assigned</p>
+
+    <br>
+
+    <a href="/delivery-management">
+        Go to Delivery Management
+    </a>
+    """.format(
+        order_id,
+        vehicle["vehicle_number"]
+    )
 
 if __name__ == "__main__":
     app.run(debug=True)

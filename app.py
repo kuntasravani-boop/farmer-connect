@@ -119,6 +119,24 @@ def buy_fertilizer(fertilizer_id):
             "SELECT last_insert_rowid()"
         ).fetchone()[0]
 
+        # Create order notification
+        connection.execute(
+            """
+            INSERT INTO notifications
+            (farmer_id, order_id, message)
+            VALUES (?, ?, ?)
+            """,
+            (
+                farmer["id"],
+                order_id,
+                "Your fertilizer order FC{} has been placed successfully.".format(
+                    order_id
+                )
+            )
+        )
+
+        connection.commit()
+
         connection.close()
 
         return render_template(
@@ -346,6 +364,34 @@ def confirm_order(order_id):
             order_id
         )
     )
+
+    # Get the farmer who placed this order
+    farmer = connection.execute(
+        """
+        SELECT farmer_id
+        FROM orders
+        WHERE id = ?
+        """,
+        (order_id,)
+    ).fetchone()
+
+    if farmer:
+
+        connection.execute(
+            """
+            INSERT INTO notifications
+            (farmer_id, order_id, message)
+            VALUES (?, ?, ?)
+            """,
+            (
+                farmer["farmer_id"],
+                order_id,
+                "Your fertilizer order FC{} has been confirmed by the dealer.".format(
+                    order_id
+                )
+            )
+        )
+
     connection.commit()
     connection.close()
 
@@ -420,6 +466,46 @@ def my_orders():
         orders=orders
     )
 
+
+@app.route("/notifications")
+def notifications():
+
+    connection = get_connection()
+
+    farmer = connection.execute(
+        """
+        SELECT id
+        FROM farmers
+        WHERE phone = ?
+        """,
+        ("9876543210",)
+    ).fetchone()
+
+    if farmer is None:
+        connection.close()
+        return "<h1>Farmer account not found.</h1>"
+
+    notifications = connection.execute(
+        """
+        SELECT
+            notifications.id,
+            notifications.message,
+            notifications.is_read,
+            notifications.created_at,
+            notifications.order_id
+        FROM notifications
+        WHERE notifications.farmer_id = ?
+        ORDER BY notifications.id DESC
+        """,
+        (farmer["id"],)
+    ).fetchall()
+
+    connection.close()
+
+    return render_template(
+        "notifications.html",
+        notifications=notifications
+    )
 @app.route("/order/<int:order_id>/delivery-choice", methods=["POST"])
 def delivery_choice(order_id):
 
@@ -790,7 +876,7 @@ def update_delivery_status(order_id, status):
 
     order = connection.execute(
         """
-        SELECT id, vehicle_id, status
+        SELECT id, farmer_id, vehicle_id, status
         FROM orders
         WHERE id = ?
         """,
@@ -801,6 +887,7 @@ def update_delivery_status(order_id, status):
         connection.close()
         return "Order not found", 404
 
+    # Update order status
     connection.execute(
         """
         UPDATE orders
@@ -808,6 +895,42 @@ def update_delivery_status(order_id, status):
         WHERE id = ?
         """,
         (status, order_id)
+    )
+
+    # Create notification message
+    if status == "Driver Accepted":
+
+        message = (
+            "The driver has accepted your fertilizer order FC{}."
+            .format(order_id)
+        )
+
+    elif status == "Out for Delivery":
+
+        message = (
+            "Your fertilizer order FC{} is now out for delivery."
+            .format(order_id)
+        )
+
+    else:
+
+        message = (
+            "Your fertilizer order FC{} has been delivered successfully."
+            .format(order_id)
+        )
+
+    # Create farmer notification
+    connection.execute(
+        """
+        INSERT INTO notifications
+        (farmer_id, order_id, message)
+        VALUES (?, ?, ?)
+        """,
+        (
+            order["farmer_id"],
+            order_id,
+            message
+        )
     )
 
     # When delivery is completed,
@@ -894,6 +1017,34 @@ def assign_vehicle(order_id, vehicle_id):
         """,
         (vehicle_id,)
     )
+
+        # Get farmer for notification
+    farmer = connection.execute(
+        """
+        SELECT farmer_id
+        FROM orders
+        WHERE id = ?
+        """,
+        (order_id,)
+    ).fetchone()
+
+    if farmer:
+
+        connection.execute(
+            """
+            INSERT INTO notifications
+            (farmer_id, order_id, message)
+            VALUES (?, ?, ?)
+            """,
+            (
+                farmer["farmer_id"],
+                order_id,
+                "Your fertilizer order FC{} has been assigned to vehicle {}.".format(
+                    order_id,
+                    vehicle["vehicle_number"]
+                )
+            )
+        )
 
     connection.commit()
     connection.close()
@@ -1009,6 +1160,34 @@ def assign_shared_vehicle(order_id, vehicle_id):
         """,
         (vehicle_id,)
     )
+
+        # Get farmer for notification
+    farmer = connection.execute(
+        """
+        SELECT farmer_id
+        FROM orders
+        WHERE id = ?
+        """,
+        (order_id,)
+    ).fetchone()
+
+    if farmer:
+
+        connection.execute(
+            """
+            INSERT INTO notifications
+            (farmer_id, order_id, message)
+            VALUES (?, ?, ?)
+            """,
+            (
+                farmer["farmer_id"],
+                order_id,
+                "Your fertilizer order FC{} has been added to a shared delivery vehicle {}.".format(
+                    order_id,
+                    vehicle["vehicle_number"]
+                )
+            )
+        )
 
     connection.commit()
 

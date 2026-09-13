@@ -100,9 +100,19 @@
                     {{ fertilizer.stock }} bags
                 </p>
 
+                {% if fertilizer.stock > 0 %}
+
                 <button onclick="location.href='/buy/{{ fertilizer.id }}'">
-                    Buy Now
+                    🛒 Buy Now
                 </button>
+
+                {% else %}
+
+                <p style="color: red; font-weight: bold;">
+                    ❌ Out of Stock
+                </p>
+
+                {% endif %}
 
             </div>
 

@@ -97,6 +97,7 @@ def buy_fertilizer(fertilizer_id):
             connection.close()
             return "<h1>Farmer account not found.</h1>"
 
+        # Create order
         connection.execute(
             """
             INSERT INTO orders
@@ -113,11 +114,22 @@ def buy_fertilizer(fertilizer_id):
             )
         )
 
-        connection.commit()
-
         order_id = connection.execute(
             "SELECT last_insert_rowid()"
         ).fetchone()[0]
+
+        # Deduct ordered quantity from inventory
+        connection.execute(
+            """
+            UPDATE fertilizers
+            SET stock = stock - ?
+            WHERE id = ?
+            """,
+            (
+                quantity,
+                fertilizer["id"]
+            )
+        )
 
         # Create order notification
         connection.execute(
@@ -136,7 +148,6 @@ def buy_fertilizer(fertilizer_id):
         )
 
         connection.commit()
-
         connection.close()
 
         return render_template(
@@ -145,7 +156,6 @@ def buy_fertilizer(fertilizer_id):
             fertilizer=fertilizer,
             quantity=quantity
         )
-
     return render_template(
         "order_form.html",
         fertilizer=fertilizer
@@ -348,6 +358,131 @@ def dealer_dashboard():
         new_vehicle_count=new_vehicle_count,
         no_vehicle_count=no_vehicle_count
     )
+
+@app.route("/dealer-inventory")
+def dealer_inventory():
+
+    connection = get_connection()
+
+    fertilizers = connection.execute(
+        """
+        SELECT
+            id,
+            name,
+            price,
+            stock
+        FROM fertilizers
+        ORDER BY id DESC
+        """
+    ).fetchall()
+
+    connection.close()
+
+    return render_template(
+        "dealer_inventory.html",
+        fertilizers=fertilizers
+    )
+@app.route("/dealer-inventory/add", methods=["GET", "POST"])
+def add_fertilizer():
+
+    if request.method == "POST":
+
+        name = request.form["name"].strip()
+        price = float(request.form["price"])
+        stock = int(request.form["stock"])
+
+        if name == "":
+            return "<h1>Fertilizer name cannot be empty.</h1>"
+
+        if price < 0:
+            return "<h1>Price cannot be negative.</h1>"
+
+        if stock < 0:
+            return "<h1>Stock cannot be negative.</h1>"
+
+        connection = get_connection()
+
+        connection.execute(
+            """
+            INSERT INTO fertilizers
+            (name, price, stock)
+            VALUES (?, ?, ?)
+            """,
+            (
+                name,
+                price,
+                stock
+            )
+        )
+
+        connection.commit()
+        connection.close()
+
+        return redirect("/dealer-inventory")
+
+    return render_template("add_fertilizer.html")
+@app.route("/dealer-inventory/edit/<int:fertilizer_id>", methods=["GET", "POST"])
+def edit_fertilizer(fertilizer_id):
+
+    connection = get_connection()
+
+    fertilizer = connection.execute(
+        """
+        SELECT
+            id,
+            name,
+            price,
+            stock
+        FROM fertilizers
+        WHERE id = ?
+        """,
+        (fertilizer_id,)
+    ).fetchone()
+
+    if fertilizer is None:
+        connection.close()
+        return "<h1>Fertilizer not found.</h1>"
+
+    if request.method == "POST":
+
+        price = float(request.form["price"])
+        stock = int(request.form["stock"])
+
+        if price < 0:
+            connection.close()
+            return "<h1>Price cannot be negative.</h1>"
+
+        if stock < 0:
+            connection.close()
+            return "<h1>Stock cannot be negative.</h1>"
+
+        connection.execute(
+            """
+            UPDATE fertilizers
+            SET price = ?,
+                stock = ?
+            WHERE id = ?
+            """,
+            (
+                price,
+                stock,
+                fertilizer_id
+            )
+        )
+
+        connection.commit()
+
+        connection.close()
+
+        return redirect("/dealer-inventory")
+
+    connection.close()
+
+    return render_template(
+        "edit_fertilizer.html",
+        fertilizer=fertilizer
+    )
+
 @app.route("/dealer/confirm/<int:order_id>")
 def confirm_order(order_id):
 

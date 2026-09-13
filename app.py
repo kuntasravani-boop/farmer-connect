@@ -39,22 +39,48 @@ def login():
 @app.route("/logout")
 def logout():
     return redirect("/")
-
 @app.route("/products")
 def products():
 
+    search = request.args.get("search", "").strip()
+    availability = request.args.get("availability", "all")
+
     connection = get_connection()
 
-    fertilizers = connection.execute("""
+    query = """
         SELECT id, name, price, stock
         FROM fertilizers
-    """).fetchall()
+        WHERE 1=1
+    """
+
+    parameters = []
+
+    # Search by fertilizer name
+    if search:
+        query += " AND name LIKE ?"
+        parameters.append("%" + search + "%")
+
+    # Filter by stock availability
+    if availability == "available":
+        query += " AND stock > 0"
+
+    elif availability == "out":
+        query += " AND stock = 0"
+
+    query += " ORDER BY id DESC"
+
+    fertilizers = connection.execute(
+        query,
+        parameters
+    ).fetchall()
 
     connection.close()
 
     return render_template(
         "products.html",
-        fertilizers=fertilizers
+        fertilizers=fertilizers,
+        search=search,
+        availability=availability
     )
 @app.route("/buy/<int:fertilizer_id>", methods=["GET", "POST"])
 def buy_fertilizer(fertilizer_id):

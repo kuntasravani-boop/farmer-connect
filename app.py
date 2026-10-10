@@ -105,12 +105,16 @@ def buy_fertilizer(fertilizer_id):
 
         quantity = int(request.form["quantity"])
         address = request.form["address"]
+        payment_method = request.form["payment_method"]
 
         if quantity <= 0:
             return "<h1>Quantity must be greater than 0.</h1>"
 
         if quantity > fertilizer["stock"]:
             return "<h1>Not enough fertilizer available.</h1>"
+
+        if payment_method == "":
+            return "<h1>Please select a payment method.</h1>"
 
         connection = get_connection()
 
@@ -127,8 +131,17 @@ def buy_fertilizer(fertilizer_id):
         connection.execute(
             """
             INSERT INTO orders
-            (farmer_id, fertilizer_id, quantity, delivery_type, address, status)
-            VALUES (?, ?, ?, ?, ?, ?)
+            (
+                farmer_id,
+                fertilizer_id,
+                quantity,
+                delivery_type,
+                address,
+                status,
+                payment_method,
+                payment_status
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 farmer["id"],
@@ -136,7 +149,9 @@ def buy_fertilizer(fertilizer_id):
                 quantity,
                 "Pending",
                 address,
-                "Pending Dealer Confirmation"
+                "Pending Dealer Confirmation",
+                payment_method,
+                "Pending"
             )
         )
 
@@ -182,6 +197,7 @@ def buy_fertilizer(fertilizer_id):
             fertilizer=fertilizer,
             quantity=quantity
         )
+
     return render_template(
         "order_form.html",
         fertilizer=fertilizer
@@ -535,7 +551,6 @@ def confirm_order(order_id):
         """,
         (order_id,)
     ).fetchone()
-
     if farmer:
 
         connection.execute(
@@ -577,6 +592,7 @@ def reject_order(order_id):
     connection.close()
 
     return redirect("/dealer-dashboard")
+
 @app.route("/my-orders")
 def my_orders():
 
@@ -596,29 +612,31 @@ def my_orders():
         return "<h1>Farmer account not found.</h1>"
 
     orders = connection.execute(
-    """
-    SELECT
-        orders.id,
-        fertilizers.name AS fertilizer_name,
-        fertilizers.price,
-        orders.quantity,
-        orders.address,
-        orders.status,
-        orders.delivery_type,
-        vehicles.vehicle_number,
-        vehicles.vehicle_type,
-        vehicles.driver_name,
-        vehicles.driver_phone
-    FROM orders
-    JOIN fertilizers
-        ON orders.fertilizer_id = fertilizers.id
-    LEFT JOIN vehicles
-        ON orders.vehicle_id = vehicles.id
-    WHERE orders.farmer_id = ?
-    ORDER BY orders.id DESC
-    """,
-    (farmer["id"],)
-).fetchall()
+        """
+        SELECT
+            orders.id,
+            fertilizers.name AS fertilizer_name,
+            fertilizers.price,
+            orders.quantity,
+            orders.address,
+            orders.status,
+            orders.delivery_type,
+            orders.payment_method,
+            orders.payment_status,
+            vehicles.vehicle_number,
+            vehicles.vehicle_type,
+            vehicles.driver_name,
+            vehicles.driver_phone
+        FROM orders
+        JOIN fertilizers
+            ON orders.fertilizer_id = fertilizers.id
+        LEFT JOIN vehicles
+            ON orders.vehicle_id = vehicles.id
+        WHERE orders.farmer_id = ?
+        ORDER BY orders.id DESC
+        """,
+        (farmer["id"],)
+    ).fetchall()
 
     connection.close()
 
@@ -626,7 +644,6 @@ def my_orders():
         "my_orders.html",
         orders=orders
     )
-
 
 @app.route("/notifications")
 def notifications():
